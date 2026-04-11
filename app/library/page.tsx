@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import {
   ArrowLeft,
   Sparkles,
@@ -20,66 +21,70 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 
-const initialSubscriptions = [
-  {
-    id: "sub-llm",
-    title: "LLM Research Pulse",
-    intent: "Track top-tier LLM papers and high-impact benchmarks",
-    frequency: "Daily",
-    status: "active",
-    lastPush: "3 hours ago",
-    tags: ["Paper", "Benchmark", "ArXiv"],
-  },
-  {
-    id: "sub-ai-apps",
-    title: "AI Product Signals",
-    intent: "New AI products, launches, and revenue stories",
-    frequency: "2x / week",
-    status: "active",
-    lastPush: "Yesterday",
-    tags: ["Product", "Funding", "GTM"],
-  },
-  {
-    id: "sub-growth",
-    title: "Career Growth",
-    intent: "Actionable deep dives on career strategy and leadership",
-    frequency: "Weekly",
-    status: "paused",
-    lastPush: "6 days ago",
-    tags: ["Leadership", "Career"],
-  },
-]
+type LibrarySubscription = {
+  id: string
+  title: string
+  intent: string
+  frequency: "Daily" | "2x / week" | "Weekly" | "Monthly"
+  status: "active" | "paused"
+  lastPush: string
+  tags: string[]
+}
 
-const initialBriefs: Array<{
+type LibraryBrief = {
   id: string
   title: string
   summary: string
+  resourceType:
+    | "concept"
+    | "method"
+    | "mistake-analysis"
+    | "exercise-guide"
+    | "intervention"
+    | "speaking-guide"
+    | "article"
+    | "paper"
+  subject: string
+  topic: string
+  targetModule: "practice" | "solver" | "dashboard" | "speak" | "library"
+  difficulty: "Beginner" | "Intermediate" | "Advanced"
+  ageGroup: "kids" | "teens" | "general"
+  language: "en" | "zh"
   tags: string[]
   readTime: string
   source: string
   sourceUrl: string
+  imageUrl?: string
   createdAt: string
   isRelevant?: boolean
   keywords?: string[]
   pdfUrl?: string
   originalTextPreview?: string
-}> = []
+}
 
 export default function LibraryPage() {
   const [mode, setMode] = useState<"digest" | "deep">("digest")
+  const [recommendedAgeGroup, setRecommendedAgeGroup] = useState<"kids" | "teens" | "general">("teens")
+  const [preferredLanguage, setPreferredLanguage] = useState<"en" | "zh">("en")
   const [intentInput, setIntentInput] = useState("")
-  const [subscriptions, setSubscriptions] = useState(initialSubscriptions)
-  const [briefs, setBriefs] = useState(initialBriefs)
+  const [subscriptions, setSubscriptions] = useState<LibrarySubscription[]>([])
+  const [briefs, setBriefs] = useState<LibraryBrief[]>([])
   const [feedback, setFeedback] = useState<Record<string, "up" | "down" | null>>({})
   const [query, setQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "paused">("all")
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [detailsId, setDetailsId] = useState<string | null>(null)
   const [showManagePanel, setShowManagePanel] = useState(false)
+  const [subscriptionsLoading, setSubscriptionsLoading] = useState(false)
+  const [subscriptionsError, setSubscriptionsError] = useState<string | null>(null)
   const [briefsLoading, setBriefsLoading] = useState(false)
   const [briefsError, setBriefsError] = useState<string | null>(null)
   const [selectedBriefId, setSelectedBriefId] = useState<string | null>(null)
-  const [detailsDraft, setDetailsDraft] = useState({
+  const [detailsDraft, setDetailsDraft] = useState<{
+    title: string
+    intent: string
+    frequency: LibrarySubscription["frequency"]
+  }>({
     title: "",
     intent: "",
     frequency: "Weekly",
@@ -89,17 +94,70 @@ export default function LibraryPage() {
     message: string
   } | null>(null)
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const searchParams = useSearchParams()
+  const [externalContextDismissed, setExternalContextDismissed] = useState(false)
+  const [externalContextApplied, setExternalContextApplied] = useState(false)
 
   const samplePrompts = [
-    "Track LLM benchmarking papers and new evaluation datasets.",
-    "Weekly AI product launches and early revenue signals.",
-    "Career growth insights for tech leads and managers.",
+    "Quadratic equations concept review and solving methods.",
+    "Speaking fluency tips for oral English practice.",
+    "Derivative mistake analysis and correction strategies.",
   ]
 
   const activeCount = useMemo(
     () => subscriptions.filter((item) => item.status === "active").length,
     [subscriptions]
   )
+  const externalContext = useMemo(() => {
+    const source = searchParams.get("source")?.trim() || ""
+    const topic = searchParams.get("topic")?.trim() || ""
+    const context = searchParams.get("context")?.trim() || ""
+    const keywords = (searchParams.get("keywords") || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean)
+
+    if (!source && !topic && !context && keywords.length === 0) {
+      return null
+    }
+
+    return {
+      source,
+      topic,
+      context,
+      keywords,
+    }
+  }, [searchParams])
+
+  const externalTargetModule = useMemo(() => {
+    if (!externalContext?.source) {
+      return undefined
+    }
+    const source = externalContext.source.toLowerCase()
+    if (source === "practice" || source === "solver" || source === "dashboard" || source === "speak" || source === "library") {
+      return source
+    }
+    return undefined
+  }, [externalContext])
+
+  const loadSubscriptions = async () => {
+    setSubscriptionsLoading(true)
+    setSubscriptionsError(null)
+    try {
+      const response = await fetch("/api/library/subscriptions")
+      if (!response.ok) {
+        throw new Error(`Request failed (${response.status})`)
+      }
+      const data = await response.json()
+      setSubscriptions(Array.isArray(data.items) ? data.items : [])
+    } catch {
+      setSubscriptionsError("Failed to load subscriptions.")
+      showToast("error", "Failed to load subscriptions.")
+    } finally {
+      setSubscriptionsLoading(false)
+    }
+  }
+
   const filteredSubscriptions = useMemo(() => {
     const lowered = query.trim().toLowerCase()
     return subscriptions.filter((item) => {
@@ -136,6 +194,27 @@ export default function LibraryPage() {
     })
     return Array.from(tokens).slice(0, 20)
   }, [subscriptions])
+  const effectiveKeywords = useMemo(() => {
+    if (externalContextDismissed || !externalContext || !externalContextApplied) {
+      return keywords
+    }
+
+    const merged = new Set<string>(keywords)
+    externalContext.keywords.forEach((item) => merged.add(item))
+    if (externalContext.topic) {
+      merged.add(externalContext.topic)
+    }
+    return Array.from(merged).slice(0, 20)
+  }, [externalContext, externalContextDismissed, keywords])
+
+  useEffect(() => {
+    void loadSubscriptions()
+  }, [])
+
+  useEffect(() => {
+    setExternalContextDismissed(false)
+    setExternalContextApplied(false)
+  }, [externalContext])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -143,10 +222,17 @@ export default function LibraryPage() {
       setBriefsLoading(true)
       setBriefsError(null)
       try {
-        const response = await fetch("http://localhost:8080/api/library/briefs/query", {
+        const response = await fetch("/api/library/briefs/query", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ keywords, limit: 50 }),
+          body: JSON.stringify({
+            keywords: effectiveKeywords,
+            topic: externalContextApplied ? externalContext?.topic : undefined,
+            targetModule: externalContextApplied ? externalTargetModule : undefined,
+            ageGroup: recommendedAgeGroup,
+            language: preferredLanguage,
+            limit: 50,
+          }),
           signal: controller.signal,
         })
         if (!response.ok) {
@@ -164,48 +250,80 @@ export default function LibraryPage() {
     }
     loadBriefs()
     return () => controller.abort()
-  }, [keywords])
+  }, [effectiveKeywords, externalContext, externalContextApplied, externalTargetModule, preferredLanguage, recommendedAgeGroup])
 
-  const handleCreateSubscription = () => {
+  const handleCreateSubscription = async () => {
     const trimmed = intentInput.trim()
     if (!trimmed) {
       showToast("error", "Please enter a subscription intent first.")
       return
     }
 
-    const title =
-      trimmed.length > 44 ? `${trimmed.slice(0, 41).trim()}...` : trimmed
+    try {
+      const response = await fetch("/api/library/subscriptions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ intent: trimmed }),
+      })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || `Request failed (${response.status})`)
+      }
+      const data = await response.json()
+      setSubscriptions((prev) => [data.item, ...prev])
+      setIntentInput("")
+      showToast("success", "Subscription created successfully.")
+    } catch (error) {
+      showToast("error", error instanceof Error ? error.message : "Failed to create subscription.")
+    }
+  }
 
-    const newSubscription = {
-      id: `sub-${Date.now()}`,
-      title,
-      intent: trimmed,
-      frequency: "Weekly",
-      status: "active" as const,
-      lastPush: "Just now",
-      tags: ["Custom"],
+  const handleToggleSubscription = async (id: string) => {
+    const target = subscriptions.find((item) => item.id === id)
+    if (!target) return
+
+    try {
+      const response = await fetch(`/api/library/subscriptions/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: target.status === "active" ? "paused" : "active",
+        }),
+      })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || `Request failed (${response.status})`)
+      }
+      const data = await response.json()
+      setSubscriptions((prev) => prev.map((item) => (item.id === id ? data.item : item)))
+    } catch (error) {
+      showToast("error", error instanceof Error ? error.message : "Failed to update subscription.")
+    }
+  }
+
+  const handleFeedback = async (id: string, value: "up" | "down") => {
+    const previousValue = feedback[id] ?? null
+    const nextValue = feedback[id] === value ? null : value
+    setFeedback((prev) => ({ ...prev, [id]: nextValue }))
+
+    if (!nextValue) {
+      return
     }
 
-    setSubscriptions((prev) => [newSubscription, ...prev])
-    setIntentInput("")
-    showToast("success", "Subscription created successfully.")
-  }
-
-  const handleToggleSubscription = (id: string) => {
-    setSubscriptions((prev) =>
-      prev.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              status: item.status === "active" ? "paused" : "active",
-            }
-          : item
-      )
-    )
-  }
-
-  const handleFeedback = (id: string, value: "up" | "down") => {
-    setFeedback((prev) => ({ ...prev, [id]: prev[id] === value ? null : value }))
+    try {
+      const response = await fetch(`/api/library/briefs/${id}/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: nextValue }),
+      })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || `Request failed (${response.status})`)
+      }
+    } catch (error) {
+      setFeedback((prev) => ({ ...prev, [id]: previousValue }))
+      showToast("error", error instanceof Error ? error.message : "Failed to save feedback.")
+    }
   }
 
   const handleOpenBrief = (url?: string) => {
@@ -238,33 +356,70 @@ export default function LibraryPage() {
     })
   }
 
-  const handleBatchPause = () => {
+  const handleBatchPause = async () => {
     if (selectedIds.length === 0) {
       showToast("error", "Select at least one subscription.")
       return
     }
-    const selected = new Set(selectedIds)
-    setSubscriptions((prev) =>
-      prev.map((item) => (selected.has(item.id) ? { ...item, status: "paused" } : item))
-    )
-    showToast("success", "Selected subscriptions paused.")
+
+    try {
+      const response = await fetch("/api/library/subscriptions/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedIds, action: "pause" }),
+      })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || `Request failed (${response.status})`)
+      }
+      const data = await response.json()
+      setSubscriptions(Array.isArray(data.items) ? data.items : [])
+      showToast("success", "Selected subscriptions paused.")
+    } catch (error) {
+      showToast("error", error instanceof Error ? error.message : "Failed to pause subscriptions.")
+    }
   }
 
-  const handleBatchDelete = () => {
+  const handleBatchDelete = async () => {
     if (selectedIds.length === 0) {
       showToast("error", "Select at least one subscription.")
       return
     }
-    const selected = new Set(selectedIds)
-    setSubscriptions((prev) => prev.filter((item) => !selected.has(item.id)))
-    setSelectedIds([])
-    showToast("success", "Selected subscriptions deleted.")
+
+    try {
+      const response = await fetch("/api/library/subscriptions/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedIds, action: "delete" }),
+      })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || `Request failed (${response.status})`)
+      }
+      const data = await response.json()
+      setSubscriptions(Array.isArray(data.items) ? data.items : [])
+      setSelectedIds([])
+      showToast("success", "Selected subscriptions deleted.")
+    } catch (error) {
+      showToast("error", error instanceof Error ? error.message : "Failed to delete subscriptions.")
+    }
   }
 
-  const handleDeleteSubscription = (id: string) => {
-    setSubscriptions((prev) => prev.filter((item) => item.id !== id))
-    setSelectedIds((prev) => prev.filter((item) => item !== id))
-    showToast("success", "Subscription deleted.")
+  const handleDeleteSubscription = async (id: string) => {
+    try {
+      const response = await fetch(`/api/library/subscriptions/${id}`, {
+        method: "DELETE",
+      })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || `Request failed (${response.status})`)
+      }
+      setSubscriptions((prev) => prev.filter((item) => item.id !== id))
+      setSelectedIds((prev) => prev.filter((item) => item !== id))
+      showToast("success", "Subscription deleted.")
+    } catch (error) {
+      showToast("error", error instanceof Error ? error.message : "Failed to delete subscription.")
+    }
   }
 
   const handleOpenDetails = (id: string) => {
@@ -282,7 +437,7 @@ export default function LibraryPage() {
     setDetailsId(null)
   }
 
-  const handleSaveDetails = () => {
+  const handleSaveDetails = async () => {
     if (!detailsId) return
     const title = detailsDraft.title.trim()
     const intent = detailsDraft.intent.trim()
@@ -290,25 +445,94 @@ export default function LibraryPage() {
       showToast("error", "Title and intent are required.")
       return
     }
-    setSubscriptions((prev) =>
-      prev.map((item) =>
-        item.id === detailsId
-          ? {
-              ...item,
-              title,
-              intent,
-              frequency: detailsDraft.frequency,
-            }
-          : item
-      )
-    )
-    setDetailsId(null)
-    showToast("success", "Subscription updated.")
+
+    try {
+      const response = await fetch(`/api/library/subscriptions/${detailsId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          intent,
+          frequency: detailsDraft.frequency,
+        }),
+      })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || `Request failed (${response.status})`)
+      }
+      const data = await response.json()
+      setSubscriptions((prev) => prev.map((item) => (item.id === detailsId ? data.item : item)))
+      setDetailsId(null)
+      showToast("success", "Subscription updated.")
+    } catch (error) {
+      showToast("error", error instanceof Error ? error.message : "Failed to update subscription.")
+    }
   }
 
   const handleUseSample = () => {
     const pick = samplePrompts[Math.floor(Math.random() * samplePrompts.length)]
     setIntentInput(pick)
+  }
+
+  const handleApplyExternalContextToSearch = () => {
+    if (!externalContext) {
+      return
+    }
+    setExternalContextApplied(true)
+    showToast("success", "External context applied to brief search.")
+  }
+
+  const handleCreateDraftFromExternalContext = () => {
+    if (!externalContext) {
+      return
+    }
+
+    const draft = [
+      externalContext.topic ? `Topic: ${externalContext.topic}` : "",
+      externalContext.context ? `Context: ${externalContext.context}` : "",
+      externalContext.keywords.length > 0 ? `Keywords: ${externalContext.keywords.join(", ")}` : "",
+    ]
+      .filter(Boolean)
+      .join(" | ")
+
+    setIntentInput(draft)
+    showToast("success", "External context converted to subscription draft.")
+  }
+
+  const handleDismissExternalContext = () => {
+    setExternalContextDismissed(true)
+    setExternalContextApplied(false)
+    showToast("success", "External context dismissed.")
+  }
+
+  const formatResourceType = (value?: LibraryBrief["resourceType"]) => {
+    if (!value) {
+      return "Resource"
+    }
+    switch (value) {
+      case "mistake-analysis":
+        return "Mistake Analysis"
+      case "exercise-guide":
+        return "Exercise Guide"
+      case "speaking-guide":
+        return "Speaking Guide"
+      default:
+        return value.replace(/(^|\s|-)\w/g, (match) => match.toUpperCase()).replaceAll("-", " ")
+    }
+  }
+
+  const formatLanguage = (value?: LibraryBrief["language"]) => {
+    if (!value) {
+      return "N/A"
+    }
+    return value.toUpperCase()
+  }
+
+  const getFallbackImage = (brief: Pick<LibraryBrief, "targetModule" | "subject" | "resourceType">) => {
+    if (brief.targetModule === "speak") return "/modern-books-writing.jpg"
+    if (brief.resourceType === "paper") return "/machine-learning-neural-network.jpg"
+    if (brief.subject === "Mathematics") return "/quantum-physics-experiment.jpg"
+    return "/placeholder.jpg"
   }
 
   const clampSummary = (text: string) =>
@@ -350,7 +574,7 @@ export default function LibraryPage() {
               <div className="h-6 w-px bg-border" />
               <div>
                 <h1 className="text-xl font-semibold text-foreground">SenSight Library</h1>
-                <p className="text-xs text-muted-foreground">Intelligent subscriptions for knowledge work</p>
+                <p className="text-xs text-muted-foreground">Adaptive learning resources for every study module</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -377,7 +601,7 @@ export default function LibraryPage() {
         <div className="max-w-7xl mx-auto space-y-10">
           <Card className="border-border/60 bg-gradient-to-br from-secondary/10 via-background to-accent/10">
             <CardContent className="p-8">
-              <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
                 <div className="space-y-4">
                   <div className="flex items-center gap-3">
                     <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center">
@@ -386,34 +610,59 @@ export default function LibraryPage() {
                     <div>
                       <h2 className="text-3xl font-bold text-foreground">Create a smart subscription</h2>
                       <p className="text-muted-foreground">
-                        Describe what you care about. SenSight will search, summarize, and deliver briefings.
+                        Describe a learning topic, weak point, or study goal. SenSight will recommend matching resources.
                       </p>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Badge variant="secondary">"Track LLM benchmarking papers"</Badge>
-                    <Badge variant="secondary">"Weekly AI product launches"</Badge>
-                    <Badge variant="secondary">"Fintech regulation updates"</Badge>
+                    <Badge variant="secondary">"Quadratic equations concept review"</Badge>
+                    <Badge variant="secondary">"Speaking fluency tips for interviews"</Badge>
+                    <Badge variant="secondary">"Derivative mistake analysis"</Badge>
                   </div>
                 </div>
 
                 <div className="space-y-4">
+                  <div className="flex flex-wrap gap-3">
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">Age Group</p>
+                      <select
+                        className="h-10 rounded-md border border-border/60 bg-background px-3 text-sm text-foreground"
+                        value={recommendedAgeGroup}
+                        onChange={(event) => setRecommendedAgeGroup(event.target.value as "kids" | "teens" | "general")}
+                      >
+                        <option value="kids">Kids</option>
+                        <option value="teens">Teens</option>
+                        <option value="general">General</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">Language</p>
+                      <select
+                        className="h-10 rounded-md border border-border/60 bg-background px-3 text-sm text-foreground"
+                        value={preferredLanguage}
+                        onChange={(event) => setPreferredLanguage(event.target.value as "en" | "zh")}
+                      >
+                        <option value="en">English</option>
+                        <option value="zh">Chinese</option>
+                      </select>
+                    </div>
+                  </div>
                   <div className="rounded-xl border border-border/60 bg-card p-4">
                     <textarea
                       value={intentInput}
                       onChange={(event) => setIntentInput(event.target.value)}
                       className="min-h-[120px] w-full resize-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                      placeholder="Describe your intent, preferred sources, and output style..."
+                      placeholder="Describe a knowledge point, learning difficulty, or study objective..."
                     />
                     <div className="mt-4 flex flex-wrap gap-2">
                       <Badge variant="outline" className="bg-transparent">
-                        Paper
+                        Concept
                       </Badge>
                       <Badge variant="outline" className="bg-transparent">
-                        Market
+                        Method
                       </Badge>
                       <Badge variant="outline" className="bg-transparent">
-                        Expert POV
+                        Speaking
                       </Badge>
                     </div>
                   </div>
@@ -430,6 +679,54 @@ export default function LibraryPage() {
               </div>
             </CardContent>
           </Card>
+
+          {externalContext && !externalContextDismissed && (
+            <Card className="border-border/60 bg-card">
+              <CardContent className="p-6">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline">External Context</Badge>
+                      {externalContext.source && <Badge variant="secondary">From {externalContext.source}</Badge>}
+                    </div>
+                    <div className="space-y-2 text-sm text-muted-foreground">
+                      {externalContext.topic && (
+                        <p>
+                          <span className="font-medium text-foreground">Topic:</span> {externalContext.topic}
+                        </p>
+                      )}
+                      {externalContext.context && (
+                        <p>
+                          <span className="font-medium text-foreground">Context:</span> {externalContext.context}
+                        </p>
+                      )}
+                      {externalContext.keywords.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium text-foreground">Keywords:</span>
+                          {externalContext.keywords.map((keyword) => (
+                            <Badge key={keyword} variant="outline" className="bg-transparent">
+                              {keyword}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" onClick={handleApplyExternalContextToSearch}>
+                      Use For Brief Search
+                    </Button>
+                    <Button variant="outline" onClick={handleCreateDraftFromExternalContext}>
+                      Create Subscription Draft
+                    </Button>
+                    <Button variant="ghost" onClick={handleDismissExternalContext}>
+                      Dismiss
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <div className="grid gap-8 lg:grid-cols-[280px_1fr]">
             <section className="space-y-4">
@@ -491,7 +788,21 @@ export default function LibraryPage() {
                 )}
               </div>
               <div className="space-y-4">
-                {filteredSubscriptions.length === 0 && (
+                {subscriptionsLoading && (
+                  <Card className="border-dashed border-border/60 bg-card">
+                    <CardContent className="p-6 text-sm text-muted-foreground">
+                      Loading subscriptions...
+                    </CardContent>
+                  </Card>
+                )}
+                {subscriptionsError && !subscriptionsLoading && (
+                  <Card className="border-dashed border-border/60 bg-card">
+                    <CardContent className="p-6 text-sm text-muted-foreground">
+                      {subscriptionsError}
+                    </CardContent>
+                  </Card>
+                )}
+                {!subscriptionsLoading && !subscriptionsError && filteredSubscriptions.length === 0 && (
                   <Card className="border-dashed border-border/60 bg-card">
                     <CardContent className="p-6 text-sm text-muted-foreground">
                       No subscriptions match your filters.
@@ -574,9 +885,9 @@ export default function LibraryPage() {
             <section className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold text-foreground">Latest Briefs</h3>
+                  <h3 className="text-lg font-semibold text-foreground">Recommended Learning Resources</h3>
                   <p className="text-sm text-muted-foreground">
-                    {mode === "digest" ? "Short, high-signal summaries" : "Long-form collections and analysis"}
+                    {mode === "digest" ? "Short, focused learning resources" : "Long-form study resources and analysis"}
                   </p>
                 </div>
                 <Button variant="outline" size="sm" className="gap-2">
@@ -617,8 +928,28 @@ export default function LibraryPage() {
                     onClick={() => setSelectedBriefId(brief.id)}
                   >
                     <CardContent className="p-5 space-y-4">
+                      <div className="overflow-hidden rounded-2xl border border-border/60">
+                        <img
+                          src={brief.imageUrl || getFallbackImage(brief)}
+                          alt={brief.title}
+                          className="h-44 w-full object-cover"
+                        />
+                      </div>
                       <div className="flex flex-wrap items-center gap-2">
                         {brief.isRelevant && <Badge variant="secondary">Relevant</Badge>}
+                        <Badge variant="secondary">{formatResourceType(brief.resourceType)}</Badge>
+                        <Badge variant="outline" className="bg-transparent">
+                          {brief.subject}
+                        </Badge>
+                        <Badge variant="outline" className="bg-transparent">
+                          For {brief.targetModule}
+                        </Badge>
+                        <Badge variant="outline" className="bg-transparent">
+                          {brief.ageGroup}
+                        </Badge>
+                        <Badge variant="outline" className="bg-transparent">
+                          {formatLanguage(brief.language)}
+                        </Badge>
                         {brief.tags?.slice(0, 2).map((tag) => (
                           <Badge key={`${brief.id}-${tag}`} variant="secondary">
                             {tag}
@@ -630,6 +961,9 @@ export default function LibraryPage() {
                       </div>
                       <div className="space-y-2">
                         <h4 className="text-xl font-semibold text-foreground">{brief.title}</h4>
+                        <p className="text-xs text-muted-foreground">
+                          Topic: {brief.topic} · Difficulty: {brief.difficulty}
+                        </p>
                         <p className="text-sm text-muted-foreground leading-relaxed">
                           {clampSummary(brief.summary)}
                         </p>
@@ -682,7 +1016,10 @@ export default function LibraryPage() {
                     className="h-10 w-full rounded-md border border-border/60 bg-background px-3 text-sm text-foreground"
                     value={detailsDraft.frequency}
                     onChange={(event) =>
-                      setDetailsDraft((prev) => ({ ...prev, frequency: event.target.value }))
+                      setDetailsDraft((prev) => ({
+                        ...prev,
+                        frequency: event.target.value as LibrarySubscription["frequency"],
+                      }))
                     }
                   >
                     <option value="Daily">Daily</option>
@@ -724,13 +1061,55 @@ export default function LibraryPage() {
               </div>
             </div>
             <div className="max-h-[70vh] space-y-4 overflow-y-auto px-6 py-6">
+              <div className="overflow-hidden rounded-2xl border border-border/60">
+                <img
+                  src={selectedBrief.imageUrl || getFallbackImage(selectedBrief)}
+                  alt={selectedBrief.title}
+                  className="h-56 w-full object-cover"
+                />
+              </div>
               <div className="flex flex-wrap gap-2">
                 {selectedBrief.isRelevant && <Badge variant="secondary">Relevant</Badge>}
+                <Badge variant="secondary">{formatResourceType(selectedBrief.resourceType)}</Badge>
+                <Badge variant="outline" className="bg-transparent">
+                  {selectedBrief.subject}
+                </Badge>
+                <Badge variant="outline" className="bg-transparent">
+                  For {selectedBrief.targetModule}
+                </Badge>
+                <Badge variant="outline" className="bg-transparent">
+                  {selectedBrief.ageGroup}
+                </Badge>
+                <Badge variant="outline" className="bg-transparent">
+                  {formatLanguage(selectedBrief.language)}
+                </Badge>
                 {selectedBrief.tags?.map((tag) => (
                   <Badge key={`${selectedBrief.id}-${tag}`} variant="secondary">
                     {tag}
                   </Badge>
                 ))}
+              </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-lg border border-border/60 p-3">
+                  <p className="text-xs text-muted-foreground">Topic</p>
+                  <p className="text-sm font-medium text-foreground">{selectedBrief.topic}</p>
+                </div>
+                <div className="rounded-lg border border-border/60 p-3">
+                  <p className="text-xs text-muted-foreground">Difficulty</p>
+                  <p className="text-sm font-medium text-foreground">{selectedBrief.difficulty}</p>
+                </div>
+                <div className="rounded-lg border border-border/60 p-3">
+                  <p className="text-xs text-muted-foreground">Target Module</p>
+                  <p className="text-sm font-medium text-foreground">{selectedBrief.targetModule}</p>
+                </div>
+                <div className="rounded-lg border border-border/60 p-3">
+                  <p className="text-xs text-muted-foreground">Age Group</p>
+                  <p className="text-sm font-medium text-foreground">{selectedBrief.ageGroup}</p>
+                </div>
+                <div className="rounded-lg border border-border/60 p-3">
+                  <p className="text-xs text-muted-foreground">Language</p>
+                  <p className="text-sm font-medium text-foreground">{formatLanguage(selectedBrief.language)}</p>
+                </div>
               </div>
               <div className="space-y-2">
                 <h4 className="text-base font-semibold text-foreground">Summary</h4>
