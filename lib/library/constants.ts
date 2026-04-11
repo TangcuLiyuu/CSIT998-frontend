@@ -1,0 +1,188 @@
+import type { LibraryBriefRecord, LibrarySubscriptionRecord, SubscriptionFrequency } from "@/lib/library/types"
+
+export const LIBRARY_DEFAULT_USER_ID = "demo-user"
+export const LIBRARY_DEFAULT_BRIEF_LIMIT = 50
+export const LIBRARY_MAX_BRIEF_LIMIT = 100
+export const LIBRARY_ALLOWED_FREQUENCIES: SubscriptionFrequency[] = [
+  "Daily",
+  "2x / week",
+  "Weekly",
+  "Monthly",
+]
+
+const now = "2026-04-06T08:00:00.000Z"
+
+export const LIBRARY_SEED_SUBSCRIPTIONS: LibrarySubscriptionRecord[] = [
+  {
+    id: "sub-llm",
+    userId: LIBRARY_DEFAULT_USER_ID,
+    title: "LLM Research Pulse",
+    intent: "Track top-tier LLM papers and high-impact benchmarks",
+    frequency: "Daily",
+    status: "active",
+    tags: ["Paper", "Benchmark", "ArXiv"],
+    lastPushAt: "2026-04-06T05:00:00.000Z",
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: "sub-ai-apps",
+    userId: LIBRARY_DEFAULT_USER_ID,
+    title: "AI Product Signals",
+    intent: "New AI products, launches, and revenue stories",
+    frequency: "2x / week",
+    status: "active",
+    tags: ["Product", "Funding", "GTM"],
+    lastPushAt: "2026-04-05T08:00:00.000Z",
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: "sub-growth",
+    userId: LIBRARY_DEFAULT_USER_ID,
+    title: "Career Growth",
+    intent: "Actionable deep dives on career strategy and leadership",
+    frequency: "Weekly",
+    status: "paused",
+    tags: ["Leadership", "Career"],
+    lastPushAt: "2026-03-31T08:00:00.000Z",
+    createdAt: now,
+    updatedAt: now,
+  },
+]
+
+export const LIBRARY_SEED_BRIEFS: LibraryBriefRecord[] = [
+  {
+    id: "brief-quadratic-concept",
+    title: "Quadratic Equations: core patterns, forms, and what they tell you",
+    summary:
+      "A concise concept brief explaining standard form, factorized form, and vertex form of quadratic equations. It connects each form to graph shape, roots, and when to choose a particular solving strategy.",
+    resourceType: "concept",
+    subject: "Mathematics",
+    topic: "quadratic equations",
+    targetModule: "practice",
+    difficulty: "Beginner",
+    ageGroup: "teens",
+    language: "en",
+    tags: ["Math", "Algebra", "Concept"],
+    readTime: "5 min",
+    source: "Learning Notes",
+    sourceUrl: "https://example.com/math/quadratic-concept",
+    imageUrl: "/placeholder.jpg",
+    createdAt: "2026-04-06T03:00:00.000Z",
+    keywords: ["quadratic equations", "algebra", "roots", "vertex form"],
+    originalTextPreview:
+      "Students often confuse forms of a quadratic because they memorize procedures before understanding what each form reveals about the graph and the roots.",
+  },
+  {
+    id: "brief-quadratic-method",
+    title: "How to choose between factoring, completing the square, and the quadratic formula",
+    summary:
+      "A method-oriented brief comparing the three main solving techniques for quadratic equations, with quick signals for when each method is the fastest and least error-prone.",
+    resourceType: "method",
+    subject: "Mathematics",
+    topic: "quadratic equations",
+    targetModule: "solver",
+    difficulty: "Intermediate",
+    ageGroup: "teens",
+    language: "en",
+    tags: ["Math", "Method", "Solver"],
+    readTime: "4 min",
+    source: "Solver Coach",
+    sourceUrl: "https://example.com/math/quadratic-methods",
+    imageUrl: "/neural-network-visualization.png",
+    createdAt: "2026-04-05T11:00:00.000Z",
+    keywords: ["quadratic equations", "factoring", "completing the square", "quadratic formula"],
+    originalTextPreview:
+      "The biggest time loss comes from using a heavy method on a light problem, or trying to factor when the coefficients make that path unreliable.",
+  },
+  {
+    id: "brief-calculus-mistakes",
+    title: "Derivative mistakes that keep showing up in student work",
+    summary:
+      "This brief summarizes common derivative errors, including power rule misuse, sign mistakes, and confusion between product and chain rule. It also gives quick self-check prompts students can apply before submitting answers.",
+    resourceType: "mistake-analysis",
+    subject: "Mathematics",
+    topic: "derivatives",
+    targetModule: "dashboard",
+    difficulty: "Intermediate",
+    ageGroup: "teens",
+    language: "en",
+    tags: ["Math", "Mistake Analysis", "Calculus"],
+    readTime: "6 min",
+    source: "Intervention Brief",
+    sourceUrl: "https://example.com/calculus/derivative-mistakes",
+    imageUrl: "/quantum-physics-abstract.jpg",
+    createdAt: "2026-04-02T09:00:00.000Z",
+    keywords: ["derivatives", "power rule", "chain rule", "common mistakes"],
+    originalTextPreview:
+      "Students who can state the correct rule still lose marks because they rush symbolic manipulation and skip a final structural check.",
+  },
+  {
+    id: "brief-speaking-fluency",
+    title: "Keeping oral English responses fluent under time pressure",
+    summary:
+      "A speaking guide focused on response structure, filler control, and turn extension. It helps learners stay coherent in short-answer speaking tasks and interview-style prompts.",
+    resourceType: "speaking-guide",
+    subject: "English",
+    topic: "oral conversation",
+    targetModule: "speak",
+    difficulty: "Beginner",
+    ageGroup: "teens",
+    language: "en",
+    tags: ["English", "Speaking", "Fluency"],
+    readTime: "7 min",
+    source: "Speaking Coach",
+    sourceUrl: "https://example.com/english/fluency-guide",
+    imageUrl: "/modern-books-writing.jpg",
+    createdAt: "2026-04-04T07:30:00.000Z",
+    keywords: ["oral conversation", "speaking", "fluency", "interview"],
+    originalTextPreview:
+      "Learners often stop too early because they answer the literal question but do not extend with a reason, example, or contrast.",
+  },
+  {
+    id: "brief-intervention-study-plan",
+    title: "Turning weak knowledge points into a short intervention plan",
+    summary:
+      "A practical intervention brief that shows how to transform weak-point diagnosis into a three-step study plan: revisit concept, solve targeted exercises, then explain the method aloud.",
+    resourceType: "intervention",
+    subject: "General Learning",
+    topic: "weak knowledge intervention",
+    targetModule: "dashboard",
+    difficulty: "Beginner",
+    ageGroup: "general",
+    language: "en",
+    tags: ["Intervention", "Study Plan", "Dashboard"],
+    readTime: "5 min",
+    source: "Learning Strategy Desk",
+    sourceUrl: "https://example.com/intervention/study-plan",
+    imageUrl: "/modern-literature-books.jpg",
+    createdAt: "2026-04-03T08:30:00.000Z",
+    keywords: ["weak knowledge", "intervention", "study plan", "revision"],
+    originalTextPreview:
+      "Diagnosis is only useful if it becomes an action sequence with low friction and a clear success check.",
+  },
+  {
+    id: "brief-kt-paper",
+    title: "Knowledge tracing models for adaptive question recommendation",
+    summary:
+      "A paper-style brief on how knowledge tracing models estimate mastery states and guide personalized question sequencing in adaptive learning systems.",
+    resourceType: "paper",
+    subject: "Educational AI",
+    topic: "knowledge tracing",
+    targetModule: "practice",
+    difficulty: "Advanced",
+    ageGroup: "general",
+    language: "en",
+    tags: ["Paper", "KT", "Educational AI"],
+    readTime: "8 min",
+    source: "ArXiv",
+    sourceUrl: "https://arxiv.org/",
+    imageUrl: "/machine-learning-neural-network.jpg",
+    createdAt: "2026-04-01T06:30:00.000Z",
+    keywords: ["knowledge tracing", "adaptive learning", "question recommendation", "DKT"],
+    pdfUrl: "https://arxiv.org/pdf/2403.00003",
+    originalTextPreview:
+      "Knowledge tracing offers a probabilistic view of what a learner is ready to practice next, but deployment quality depends on the granularity of knowledge labels.",
+  },
+]
