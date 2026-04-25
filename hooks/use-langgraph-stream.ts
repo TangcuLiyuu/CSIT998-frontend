@@ -2,6 +2,13 @@
 
 import { useState, useCallback, useRef } from "react";
 import { Client } from "@langchain/langgraph-sdk";
+import {
+  buildCacheKey,
+  loadTape,
+  saveTape,
+  createRecorder,
+  replayTape,
+} from "@/lib/vcr";
 import type {
   StudentProfile,
   AnalystInsight,
@@ -31,6 +38,7 @@ export interface AgentOutputs {
   insights?: AnalystInsight;
   critique?: CritiqueResult;
   revisionCount: number;
+  analystReferences?: string[];
 }
 
 export interface UseLangGraphStreamReturn {
@@ -50,6 +58,13 @@ export interface UseLangGraphStreamReturn {
 
 const LANGGRAPH_URL = "http://localhost:2024";
 const ASSISTANT_ID = "student_agent";
+
+/**
+ * VCR replay speed multiplier.
+ * 1 = real-time (original timing), 2 = 2× faster, 5 = 5× faster, etc.
+ * Set to a higher value to reduce replay delay.
+ */
+const VCR_REPLAY_SPEED = 2;
 
 export function useLangGraphStream(): UseLangGraphStreamReturn {
   const [isStreaming, setIsStreaming] = useState(false);
@@ -132,9 +147,38 @@ export function useLangGraphStream(): UseLangGraphStreamReturn {
     }
 
     if (nodeName === "analyst") {
+      const analystData = data as { insights?: AnalystInsight; analyst_tool_logs?: any };
+      
+      if (analystData.analyst_tool_logs) {
+        const log = analystData.analyst_tool_logs;
+        const isSuccess = log.status === "success";
+        const refs: string[] = log.references || [];
+
+        addEvent({
+          timestamp: new Date(),
+          node: nodeName,
+          data: {
+            action: isSuccess ? "tool_result" : "tool_error",
+            tools: [log.tool],
+            detail: isSuccess 
+              ? `成功检索知识库: ${log.query}` 
+              : `知识库检索超时或失败: ${log.error}`,
+            status: log.status,
+            references: refs,
+          },
+          type: "tool_result", 
+        });
+
+        if (isSuccess && refs.length > 0) {
+          setOutputs((prev) => ({
+            ...prev,
+            analystReferences: refs,
+          }));
+        }
+      }
       setOutputs((prev) => ({
         ...prev,
-        insights: data as AnalystInsight,
+        insights: analystData.insights as AnalystInsight,
       }));
       markNodeComplete(node);
     }
@@ -158,6 +202,62 @@ export function useLangGraphStream(): UseLangGraphStreamReturn {
     }
   }, [addEvent, markNodeComplete]);
 
+  // ─── Shared chunk processor (used by both live and replay paths) ───
+  const processChunk = useCallback(
+    (chunk: { event: string; data: unknown }) => {
+      // Add raw event for terminal display
+      addEvent({
+        timestamp: new Date(),
+        node: "raw",
+        data: chunk,
+        type: "update",
+      });
+
+      // Process updates event
+      if (chunk.event === "updates" && chunk.data) {
+        const nodeData = chunk.data as Record<string, unknown>;
+
+        // Handle each node's data
+        if (nodeData.investigator) {
+          updateNodeData("investigator", nodeData.investigator);
+        }
+        if (nodeData["external resources"]) {
+          updateNodeData("external resources", nodeData["external resources"]);
+        }
+        if (nodeData.profile_generator) {
+          const profileData = nodeData.profile_generator as { profile?: StudentProfile };
+          if (profileData.profile) {
+            updateNodeData("profile_generator", profileData.profile);
+          }
+        }
+        if (nodeData.drafting) {
+          const draftingData = nodeData.drafting as { current_report?: string };
+          if (draftingData.current_report) {
+            updateNodeData("drafting", draftingData.current_report);
+          }
+        }
+        if (nodeData.analyst) {
+          // Pass the full analyst object so updateNodeData can access both insights and analyst_tool_logs
+          updateNodeData("analyst", nodeData.analyst);
+        }
+        if (nodeData.evaluator) {
+          const evaluatorData = nodeData.evaluator as { critique?: CritiqueResult };
+          if (evaluatorData.critique) {
+            updateNodeData("evaluator", evaluatorData.critique);
+          }
+        }
+        if (nodeData.optimizer) {
+          const optimizerData = nodeData.optimizer as { current_report?: string; revision_count?: number };
+          updateNodeData("optimizer", {
+            report: optimizerData.current_report,
+            count: optimizerData.revision_count,
+          });
+        }
+      }
+    },
+    [addEvent, updateNodeData]
+  );
+
   const startStream = useCallback(
     async (targetKnowledge?: string) => {
       setIsStreaming(true);
@@ -168,107 +268,92 @@ export function useLangGraphStream(): UseLangGraphStreamReturn {
       setActiveNode(null);
 
       abortControllerRef.current = new AbortController();
+      const signal = abortControllerRef.current.signal;
 
       try {
-        // Create a new thread first
-        const thread = await clientRef.current.threads.create();
+        // ── VCR: try to load a cached tape ──────────────────────────
+        const cacheKey = buildCacheKey(targetKnowledge);
+        let tape = cacheKey ? await loadTape(cacheKey) : null;
 
-        addEvent({
-          timestamp: new Date(),
-          node: "system",
-          data: { message: `Thread created: ${thread.thread_id}` },
-          type: "update",
-        });
-
-        // Create initial input for the graph
-        const inputState = {
-          messages: [
-            {
-              role: "user",
-              content: targetKnowledge 
-                ? `请调查一下这个学生，他好像${targetKnowledge}学得很差。`
-                : "请开始对该学生的学习情况进行调查分析。",
-            },
-          ],
-          student_id: "std_001",
-          target_knowledge: targetKnowledge || "",
-          revision_count: 0,
-        };
-
-        // Stream the graph execution
-        const stream = clientRef.current.runs.stream(
-          thread.thread_id,
-          ASSISTANT_ID,
-          {
-            input: inputState,
-            streamMode: "updates",
-            config: {
-              configurable: {
-                model_name: "kimi-k2-turbo-preview",
-                temperature: 0.05,
-                openai_base_url: "https://api.moonshot.cn/v1",
-                api_key: process.env.NEXT_PUBLIC_API_KEY || "",
-              },
-              recursion_limit: 50,
-            },
-          }
-        );
-
-        for await (const chunk of stream) {
-          if (abortControllerRef.current?.signal.aborted) {
-            break;
-          }
-
-          // Add raw event for terminal display
+        if (tape) {
+          // ── REPLAY PATH: play back recorded events ────────────────
           addEvent({
             timestamp: new Date(),
-            node: "raw",
-            data: chunk,
+            node: "system",
+            data: { message: `[VCR] Replaying cached session (${tape.length} frames)` },
             type: "update",
           });
 
-          // Process updates event
-          if (chunk.event === "updates" && chunk.data) {
-            const nodeData = chunk.data as Record<string, unknown>;
+          for await (const chunk of replayTape(tape, signal, VCR_REPLAY_SPEED)) {
+            if (signal.aborted) break;
+            processChunk(chunk);
+          }
+        } else {
+          // ── RECORD PATH: live LangGraph stream + record to tape ───
+          const recorder = createRecorder();
 
-            // Handle each node's data
-            if (nodeData.investigator) {
-              updateNodeData("investigator", nodeData.investigator);
+          // Create a new thread first
+          const thread = await clientRef.current.threads.create();
+
+          addEvent({
+            timestamp: new Date(),
+            node: "system",
+            data: { message: `Thread created: ${thread.thread_id}` },
+            type: "update",
+          });
+
+          // Create initial input for the graph
+          const inputState = {
+            messages: [
+              {
+                role: "user",
+                content: targetKnowledge 
+                  ? `请调查一下这个学生，他好像${targetKnowledge}学得很差。`
+                  : "请开始对该学生的学习情况进行调查分析。",
+              },
+            ],
+            student_id: "std_001",
+            target_knowledge: targetKnowledge || "",
+            revision_count: 0,
+          };
+
+          // Stream the graph execution
+          const stream = clientRef.current.runs.stream(
+            thread.thread_id,
+            ASSISTANT_ID,
+            {
+              input: inputState,
+              streamMode: "updates",
+              config: {
+                configurable: {
+                  model_name: "kimi-k2.6",
+                  temperature: 0.6,
+                  openai_base_url: "https://api.moonshot.cn/v1",
+                  api_key: process.env.NEXT_PUBLIC_API_KEY || "",
+                },
+                recursion_limit: 50,
+              },
             }
-            if (nodeData["external resources"]) {
-              updateNodeData("external resources", nodeData["external resources"]);
-            }
-            if (nodeData.profile_generator) {
-              const profileData = nodeData.profile_generator as { profile?: StudentProfile };
-              if (profileData.profile) {
-                updateNodeData("profile_generator", profileData.profile);
+          );
+
+          for await (const chunk of stream) {
+            if (signal.aborted) break;
+
+            // Record every chunk to the tape
+            recorder.record({ event: chunk.event, data: chunk.data });
+
+            // Process through the shared pipeline
+            processChunk(chunk);
+          }
+
+          // Save the recorded tape (fire-and-forget, non-blocking)
+          if (cacheKey && recorder.length > 0 && !signal.aborted) {
+            const finalTape = recorder.finalize();
+            saveTape(cacheKey, finalTape).then((ok) => {
+              if (ok) {
+                console.log(`[VCR] Tape saved for key "${cacheKey}" (${finalTape.length} frames)`);
               }
-            }
-            if (nodeData.drafting) {
-              const draftingData = nodeData.drafting as { current_report?: string };
-              if (draftingData.current_report) {
-                updateNodeData("drafting", draftingData.current_report);
-              }
-            }
-            if (nodeData.analyst) {
-              const analystData = nodeData.analyst as { insights?: AnalystInsight };
-              if (analystData.insights) {
-                updateNodeData("analyst", analystData.insights);
-              }
-            }
-            if (nodeData.evaluator) {
-              const evaluatorData = nodeData.evaluator as { critique?: CritiqueResult };
-              if (evaluatorData.critique) {
-                updateNodeData("evaluator", evaluatorData.critique);
-              }
-            }
-            if (nodeData.optimizer) {
-              const optimizerData = nodeData.optimizer as { current_report?: string; revision_count?: number };
-              updateNodeData("optimizer", {
-                report: optimizerData.current_report,
-                count: optimizerData.revision_count,
-              });
-            }
+            });
           }
         }
 
@@ -293,7 +378,7 @@ export function useLangGraphStream(): UseLangGraphStreamReturn {
         setActiveNode(null);
       }
     },
-    [addEvent, updateNodeData]
+    [addEvent, updateNodeData, processChunk]
   );
 
   const stopStream = useCallback(() => {

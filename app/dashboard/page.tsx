@@ -264,6 +264,7 @@ export default function DashboardPage() {
                   activeNode={activeNode}
                   completedNodes={completedNodes}
                   isStreaming={isStreaming}
+                  analystReferences={outputs.analystReferences}
                 />
               </div>
             )}
