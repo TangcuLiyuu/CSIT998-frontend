@@ -12,6 +12,7 @@ export async function POST(request: Request) {
       ageGroup: typeof body?.ageGroup === "string" ? body.ageGroup : undefined,
       language: typeof body?.language === "string" ? body.language : undefined,
       limit: typeof body?.limit === "number" ? body.limit : undefined,
+      shuffleSeed: typeof body?.shuffleSeed === "string" ? body.shuffleSeed : undefined,
     })
 
     return NextResponse.json({ items })

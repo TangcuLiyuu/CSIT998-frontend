@@ -1,13 +1,12 @@
-import { LIBRARY_SEED_BRIEFS, LIBRARY_SEED_SUBSCRIPTIONS } from "@/lib/library/constants"
+import { LIBRARY_SEED_SUBSCRIPTIONS, LIBRARY_STORE_VERSION } from "@/lib/library/constants"
 import type {
   LibraryBriefFeedbackRecord,
-  LibraryBriefRecord,
   LibrarySubscriptionRecord,
 } from "@/lib/library/types"
 
 interface LibraryStore {
+  version: string
   subscriptions: LibrarySubscriptionRecord[]
-  briefs: LibraryBriefRecord[]
   feedback: LibraryBriefFeedbackRecord[]
 }
 
@@ -18,18 +17,14 @@ declare global {
 
 function cloneStore(): LibraryStore {
   return {
+    version: LIBRARY_STORE_VERSION,
     subscriptions: LIBRARY_SEED_SUBSCRIPTIONS.map((item) => ({ ...item, tags: [...item.tags] })),
-    briefs: LIBRARY_SEED_BRIEFS.map((item) => ({
-      ...item,
-      tags: [...item.tags],
-      keywords: [...item.keywords],
-    })),
     feedback: [],
   }
 }
 
 export function getLibraryStore(): LibraryStore {
-  if (!globalThis.__libraryStore) {
+  if (!globalThis.__libraryStore || globalThis.__libraryStore.version !== LIBRARY_STORE_VERSION) {
     globalThis.__libraryStore = cloneStore()
   }
   return globalThis.__libraryStore
