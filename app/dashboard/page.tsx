@@ -13,6 +13,8 @@ import {
   ChevronRight,
   Database,
   Zap,
+  Hash,
+  BookOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -29,10 +31,11 @@ import {
   UserProfileSidebar,
 } from "@/components/dashboard";
 import { useLangGraphStream } from "@/hooks/use-langgraph-stream";
-import { fetchAnalysis, fetchKnowledgeStats } from "@/lib/api";
+import { fetchAnalysis, fetchKnowledgeStats, fetchSearchById } from "@/lib/api";
 import type { AnalysisItem, AnalysisResponse, KnowledgeStats } from "@/app/types/schema";
 
 type DashboardStage = "empty" | "data" | "agent";
+type SearchMode = "knowledge" | "id";
 
 const PAGE_SIZE = 12;
 
@@ -42,8 +45,11 @@ export default function DashboardPage() {
   const [totalQuestions, setTotalQuestions] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoadingData, setIsLoadingData] = useState(false);
+  const [searchMode, setSearchMode] = useState<SearchMode>("knowledge");
+  const [searchQuery, setSearchQuery] = useState("");
   const [searchKnowledge, setSearchKnowledge] = useState("");
   const [activeKnowledge, setActiveKnowledge] = useState(""); // 当前激活的知识点搜索
+  const [activeSearchId, setActiveSearchId] = useState(""); // 当前激活的ID搜索
   const [knowledgeStats, setKnowledgeStats] = useState<{
     accuracy?: number;
     correct_count?: number;
@@ -101,15 +107,50 @@ export default function DashboardPage() {
     }
   }, []);
 
+  // 按ID搜索数据
+  const loadSearchByIdData = useCallback(async (queryId: string, page: number) => {
+    setIsLoadingData(true);
+    try {
+      const response: AnalysisResponse = await fetchSearchById(queryId, page, PAGE_SIZE);
+      setQuestions(response.items);
+      setTotalQuestions(response.total);
+      setCurrentPage(response.page);
+    } catch (err) {
+      console.error("Failed to search by ID:", err);
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, []);
+
   const handleFileUpload = useCallback(async () => {
     setIsLoadingData(true);
     await new Promise((resolve) => setTimeout(resolve, 2000));
     setActiveKnowledge("");
+    setActiveSearchId("");
     setKnowledgeStats(null);
     setSearchKnowledge("");
+    setSearchQuery("");
     setStage("data");
     await loadAnalysisData(1);
   }, [loadAnalysisData]);
+
+  const handleSearch = useCallback(async () => {
+    if (searchMode === "knowledge") {
+      if (!searchQuery.trim()) return;
+      setActiveSearchId("");
+      setActiveKnowledge(searchQuery);
+      setSearchKnowledge(searchQuery);
+      setCurrentPage(1);
+      await loadKnowledgeData(searchQuery, 1);
+    } else {
+      if (!searchQuery.trim()) return;
+      setActiveKnowledge("");
+      setKnowledgeStats(null);
+      setActiveSearchId(searchQuery);
+      setCurrentPage(1);
+      await loadSearchByIdData(searchQuery, 1);
+    }
+  }, [searchMode, searchQuery, loadKnowledgeData, loadSearchByIdData]);
 
   const handleKnowledgeSearch = useCallback(async () => {
     if (!searchKnowledge.trim()) return;
@@ -122,26 +163,48 @@ export default function DashboardPage() {
   const handlePageChange = useCallback(async (newPage: number) => {
     if (newPage < 1 || newPage > totalPages || newPage === currentPage) return;
     
-    if (activeKnowledge) {
+    if (activeSearchId) {
+      await loadSearchByIdData(activeSearchId, newPage);
+    } else if (activeKnowledge) {
       await loadKnowledgeData(activeKnowledge, newPage);
     } else {
       await loadAnalysisData(newPage);
     }
-  }, [activeKnowledge, totalPages, currentPage, loadKnowledgeData, loadAnalysisData]);
+  }, [activeSearchId, activeKnowledge, totalPages, currentPage, loadSearchByIdData, loadKnowledgeData, loadAnalysisData]);
 
-  // 清除知识点搜索，返回全部数据
-  const handleClearKnowledgeSearch = useCallback(async () => {
+  // 清除搜索过滤，返回全部数据
+  const handleClearSearch = useCallback(async () => {
     setActiveKnowledge("");
+    setActiveSearchId("");
     setSearchKnowledge("");
+    setSearchQuery("");
     setKnowledgeStats(null);
     await loadAnalysisData(1);
   }, [loadAnalysisData]);
 
+  // 清除知识点搜索，返回全部数据（保留向后兼容）
+  const handleClearKnowledgeSearch = useCallback(async () => {
+    await handleClearSearch();
+  }, [handleClearSearch]);
+
+
+  const getStudentName = useCallback((): string => {
+    try {
+      const saved = localStorage.getItem("aura-learning-user-profile");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.name || "";
+      }
+    } catch (e) {
+      console.error("Failed to read user profile:", e);
+    }
+    return "";
+  }, []);
 
   const handleStartAnalysis = useCallback(async () => {
     setStage("agent");
-    await startStream(searchKnowledge || undefined);
-  }, [startStream, searchKnowledge]);
+    await startStream(searchKnowledge || undefined, getStudentName());
+  }, [startStream, searchKnowledge, getStudentName]);
 
   const handleBackToData = useCallback(() => {
     resetStream();
@@ -151,8 +214,8 @@ export default function DashboardPage() {
 
   const handleRegenerate = useCallback(async () => {
     resetStream();
-    await startStream(searchKnowledge || undefined);
-  }, [resetStream, startStream, searchKnowledge]);
+    await startStream(searchKnowledge || undefined, getStudentName());
+  }, [resetStream, startStream, searchKnowledge, getStudentName]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -218,15 +281,41 @@ export default function DashboardPage() {
               <div className="flex items-center gap-2">
                 {stage === "data" && (
                   <>
+                    <div className="flex items-center gap-0.5">
+                      <Button
+                        variant={searchMode === "knowledge" ? "default" : "outline"}
+                        size="icon"
+                        className="h-9 w-9 rounded-r-none"
+                        onClick={() => {
+                          setSearchMode("knowledge");
+                          setSearchQuery("");
+                        }}
+                        title="Search by Knowledge Point"
+                      >
+                        <BookOpen className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant={searchMode === "id" ? "default" : "outline"}
+                        size="icon"
+                        className="h-9 w-9 rounded-l-none"
+                        onClick={() => {
+                          setSearchMode("id");
+                          setSearchQuery("");
+                        }}
+                        title="Search by Question ID"
+                      >
+                        <Hash className="h-4 w-4" />
+                      </Button>
+                    </div>
                     <div className="flex items-center gap-2">
                       <Input
-                        placeholder="Search knowledge point..."
-                        value={searchKnowledge}
-                        onChange={(e) => setSearchKnowledge(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && handleKnowledgeSearch()}
+                        placeholder={searchMode === "knowledge" ? "Search knowledge point..." : "Search by question ID..."}
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                         className="w-64"
                       />
-                      <Button variant="outline" size="icon" onClick={handleKnowledgeSearch}>
+                      <Button variant="outline" size="icon" onClick={handleSearch}>
                         <Search className="h-4 w-4" />
                       </Button>
                     </div>
@@ -347,7 +436,26 @@ export default function DashboardPage() {
           )}
           {stage === "data" && (
             <div className="space-y-6">
-              {knowledgeStats && (
+              {/* ID Search Filter Badge */}
+              {activeSearchId && (
+                <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
+                  <div className="flex items-center gap-4">
+                    <Badge variant="outline" className="text-sm py-1 px-3">
+                      <Hash className="h-3 w-3 mr-1" />
+                      Question ID: {activeSearchId}
+                    </Badge>
+                    <Badge variant="outline" className="text-sm py-1 px-3 bg-blue-500/10 text-blue-600">
+                      {totalQuestions} result{totalQuestions !== 1 ? "s" : ""} found
+                    </Badge>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={handleClearSearch}>
+                    Clear Filter
+                  </Button>
+                </div>
+              )}
+
+              {/* Knowledge Stats Filter Badge */}
+              {knowledgeStats && activeKnowledge && (
                 <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
                   <div className="flex items-center gap-4">
                     <Badge variant="outline" className="text-sm py-1 px-3">
@@ -370,7 +478,7 @@ export default function DashboardPage() {
                       Wrong: {knowledgeStats.wrong_count}
                     </Badge>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={handleClearKnowledgeSearch}>
+                  <Button variant="ghost" size="sm" onClick={handleClearSearch}>
                     Clear Filter
                   </Button>
                 </div>

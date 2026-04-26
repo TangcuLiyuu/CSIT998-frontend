@@ -51,7 +51,7 @@ export interface UseLangGraphStreamReturn {
   error: string | null;
 
   // Actions
-  startStream: (targetKnowledge?: string) => Promise<void>;
+  startStream: (targetKnowledge?: string, studentName?: string) => Promise<void>;
   stopStream: () => void;
   reset: () => void;
 }
@@ -259,7 +259,7 @@ export function useLangGraphStream(): UseLangGraphStreamReturn {
   );
 
   const startStream = useCallback(
-    async (targetKnowledge?: string) => {
+    async (targetKnowledge?: string, studentName?: string) => {
       setIsStreaming(true);
       setError(null);
       setEvents([]);
@@ -313,6 +313,7 @@ export function useLangGraphStream(): UseLangGraphStreamReturn {
               },
             ],
             student_id: "std_001",
+            student_name: studentName || "Zhang Wei",
             target_knowledge: targetKnowledge || "",
             revision_count: 0,
           };
