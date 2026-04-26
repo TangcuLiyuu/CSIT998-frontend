@@ -11,11 +11,13 @@ import {
   CheckCircle,
   Wrench,
 } from "lucide-react";
+import { KnowledgeEnvelope } from "./knowledge-envelope";
 
 interface AgentStatusHeaderProps {
   activeNode: AgentNodeName | null;
   completedNodes: AgentNodeName[];
   isStreaming: boolean;
+  analystReferences?: string[];
 }
 
 interface AgentNodeConfig {
@@ -74,6 +76,7 @@ export function AgentStatusHeader({
   activeNode,
   completedNodes,
   isStreaming,
+  analystReferences,
 }: AgentStatusHeaderProps) {
   return (
     <div className="flex items-center gap-2 overflow-x-auto pb-2">
@@ -81,6 +84,12 @@ export function AgentStatusHeader({
         const Icon = node.icon;
         const isActive = activeNode === node.id;
         const isCompleted = completedNodes.includes(node.id);
+        const isAnalyst = node.id === "analyst";
+        const hasReferences =
+          isAnalyst &&
+          isCompleted &&
+          Array.isArray(analystReferences) &&
+          analystReferences.length > 0;
 
         return (
           <div
@@ -104,8 +113,12 @@ export function AgentStatusHeader({
               {isActive && isStreaming && (
                 <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-yellow-400 animate-ping" />
               )}
-              {isCompleted && !isActive && (
+              {isCompleted && !isActive && !hasReferences && (
                 <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-green-400" />
+              )}
+              {/* Envelope icon for analyst node with references */}
+              {hasReferences && (
+                <KnowledgeEnvelope references={analystReferences!} />
               )}
             </div>
             <span
