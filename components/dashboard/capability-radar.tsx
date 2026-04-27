@@ -35,7 +35,7 @@ export function CapabilityRadarChart({ data, isLoading }: CapabilityRadarProps) 
     if (num > 10) {
         return num / 10;
     }
-    return num <= 0 ? 1 : num; 
+    return num <= 0 ? 0 : num; 
     };
   if (isLoading) {
     return (

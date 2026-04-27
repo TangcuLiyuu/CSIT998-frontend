@@ -15,7 +15,6 @@ import {
   CheckCircle2,
   PauseCircle,
   PlayCircle,
-  RefreshCw,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -44,6 +43,7 @@ type LibraryBrief = {
     | "intervention"
     | "speaking-guide"
     | "article"
+    | "paper"
   subject: string
   topic: string
   targetModule: "practice" | "solver" | "dashboard" | "speak" | "library"
@@ -54,131 +54,12 @@ type LibraryBrief = {
   readTime: string
   source: string
   sourceUrl: string
+  imageUrl?: string
   createdAt: string
   isRelevant?: boolean
-  matchScore?: number
-  matchReasons?: string[]
   keywords?: string[]
   pdfUrl?: string
   originalTextPreview?: string
-}
-
-function getCoverTheme(brief: Pick<LibraryBrief, "subject" | "topic" | "tags" | "keywords">) {
-  const text = [brief.subject, brief.topic, ...brief.tags, ...(brief.keywords || [])].join(" ").toLowerCase()
-  if (brief.subject === "English") return "english"
-  if (brief.subject === "Science") return "science"
-  if (text.includes("mean") || text.includes("data") || text.includes("statistics")) return "data"
-  if (text.includes("fraction")) return "fractions"
-  if (text.includes("decimal") || text.includes("percent")) return "decimals"
-  if (text.includes("multiplication") || text.includes("division") || text.includes("multi-digit")) return "arithmetic"
-  if (
-    text.includes("geometry") ||
-    text.includes("perimeter") ||
-    text.includes("area") ||
-    text.includes("rectangle") ||
-    text.includes("square") ||
-    text.includes("rhombus") ||
-    text.includes("parallelogram") ||
-    text.includes("volume") ||
-    text.includes("coordinate")
-  ) {
-    return "geometry"
-  }
-  return "default"
-}
-
-function ResourceCover({ brief, large = false }: { brief: LibraryBrief; large?: boolean }) {
-  const theme = getCoverTheme(brief)
-  const themes = {
-    fractions: "from-sky-50 via-blue-50 to-cyan-100 text-blue-950 border-blue-100",
-    geometry: "from-emerald-50 via-green-50 to-lime-100 text-emerald-950 border-emerald-100",
-    decimals: "from-amber-50 via-orange-50 to-yellow-100 text-amber-950 border-amber-100",
-    arithmetic: "from-indigo-50 via-sky-50 to-blue-100 text-slate-950 border-blue-100",
-    data: "from-violet-50 via-purple-50 to-fuchsia-100 text-violet-950 border-violet-100",
-    english: "from-rose-50 via-pink-50 to-red-100 text-rose-950 border-rose-100",
-    science: "from-teal-50 via-cyan-50 to-emerald-100 text-teal-950 border-teal-100",
-    default: "from-slate-50 via-zinc-50 to-stone-100 text-slate-950 border-slate-100",
-  } as const
-  const accent = {
-    fractions: "bg-blue-500",
-    geometry: "bg-emerald-500",
-    decimals: "bg-orange-500",
-    arithmetic: "bg-sky-500",
-    data: "bg-violet-500",
-    english: "bg-rose-500",
-    science: "bg-teal-500",
-    default: "bg-slate-500",
-  } as const
-  const height = large ? "h-56" : "h-44"
-
-  return (
-    <div className={`${height} relative overflow-hidden rounded-2xl border bg-gradient-to-br ${themes[theme]} p-5`}>
-      <div className="relative z-10 flex h-full flex-col justify-between">
-        <div className="flex items-center justify-between gap-3">
-          <Badge variant="secondary" className="bg-white/70 text-current">
-            {brief.subject}
-          </Badge>
-          <span className="text-xs font-semibold uppercase tracking-wide opacity-70">{brief.source}</span>
-        </div>
-        <div className="space-y-2">
-          <p className="max-w-[70%] text-lg font-bold leading-tight">{brief.topic}</p>
-          <div className="flex flex-wrap gap-2">
-            {brief.tags.slice(0, 2).map((tag) => (
-              <span key={`${brief.id}-cover-${tag}`} className="rounded-full bg-white/65 px-2 py-1 text-[11px] font-medium">
-                {tag}
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
-      <div className="absolute right-5 top-16 flex h-28 w-32 items-center justify-center">
-        {theme === "fractions" && (
-          <div className="text-center font-black leading-none">
-            <div className="text-5xl">3</div>
-            <div className="my-1 h-2 w-20 rounded-full bg-current opacity-60" />
-            <div className="text-5xl">4</div>
-          </div>
-        )}
-        {theme === "geometry" && (
-          <div className="relative h-28 w-32">
-            <div className="absolute left-2 top-6 h-20 w-24 rounded-lg border-[10px] border-current opacity-45" />
-            <div className={`absolute bottom-1 right-1 h-20 w-20 rotate-45 rounded-md ${accent[theme]} opacity-35`} />
-          </div>
-        )}
-        {theme === "decimals" && (
-          <div className="text-center font-black">
-            <div className="text-5xl">0.5</div>
-            <div className={`mt-2 rounded-xl ${accent[theme]} px-3 py-1 text-2xl text-white`}>50%</div>
-          </div>
-        )}
-        {theme === "arithmetic" && (
-          <div className="grid grid-cols-2 gap-3 text-5xl font-black">
-            <span>×</span>
-            <span>÷</span>
-            <span>+</span>
-            <span>−</span>
-          </div>
-        )}
-        {theme === "data" && (
-          <div className="flex h-24 items-end gap-3">
-            <div className={`h-10 w-7 rounded-t-lg ${accent[theme]} opacity-50`} />
-            <div className={`h-16 w-7 rounded-t-lg ${accent[theme]} opacity-70`} />
-            <div className={`h-24 w-7 rounded-t-lg ${accent[theme]}`} />
-          </div>
-        )}
-        {theme === "english" && <div className="text-5xl font-black tracking-wide">ABC</div>}
-        {theme === "science" && (
-          <div className="relative h-28 w-28">
-            <div className={`absolute left-8 top-8 h-12 w-12 rounded-full ${accent[theme]} opacity-65`} />
-            <div className="absolute inset-0 rounded-full border-[10px] border-current opacity-25" />
-          </div>
-        )}
-        {theme === "default" && <div className="text-5xl font-black">★</div>}
-      </div>
-      <div className={`absolute -bottom-10 -left-10 h-32 w-32 rounded-full ${accent[theme]} opacity-15`} />
-      <div className={`absolute -right-8 -top-8 h-28 w-28 rounded-full ${accent[theme]} opacity-15`} />
-    </div>
-  )
 }
 
 export default function LibraryPage() {
@@ -186,7 +67,6 @@ export default function LibraryPage() {
   const [recommendedAgeGroup, setRecommendedAgeGroup] = useState<"kids" | "teens" | "general">("teens")
   const [preferredLanguage, setPreferredLanguage] = useState<"en" | "zh">("en")
   const [intentInput, setIntentInput] = useState("")
-  const [resourceSeed, setResourceSeed] = useState(() => String(Date.now()))
   const [subscriptions, setSubscriptions] = useState<LibrarySubscription[]>([])
   const [briefs, setBriefs] = useState<LibraryBrief[]>([])
   const [feedback, setFeedback] = useState<Record<string, "up" | "down" | null>>({})
@@ -200,7 +80,6 @@ export default function LibraryPage() {
   const [briefsLoading, setBriefsLoading] = useState(false)
   const [briefsError, setBriefsError] = useState<string | null>(null)
   const [selectedBriefId, setSelectedBriefId] = useState<string | null>(null)
-  const [showAlertRules, setShowAlertRules] = useState(false)
   const [detailsDraft, setDetailsDraft] = useState<{
     title: string
     intent: string
@@ -220,9 +99,9 @@ export default function LibraryPage() {
   const [externalContextApplied, setExternalContextApplied] = useState(false)
 
   const samplePrompts = [
-    "Fraction addition practice with common denominator mistakes.",
-    "English past tense grammar review for short writing.",
-    "Primary science notes about light, shadow, and reflection.",
+    "Quadratic equations concept review and solving methods.",
+    "Speaking fluency tips for oral English practice.",
+    "Derivative mistake analysis and correction strategies.",
   ]
 
   const activeCount = useMemo(
@@ -352,8 +231,7 @@ export default function LibraryPage() {
             targetModule: externalContextApplied ? externalTargetModule : undefined,
             ageGroup: recommendedAgeGroup,
             language: preferredLanguage,
-            limit: 6,
-            shuffleSeed: resourceSeed,
+            limit: 50,
           }),
           signal: controller.signal,
         })
@@ -372,7 +250,7 @@ export default function LibraryPage() {
     }
     loadBriefs()
     return () => controller.abort()
-  }, [effectiveKeywords, externalContext, externalContextApplied, externalTargetModule, preferredLanguage, recommendedAgeGroup, resourceSeed])
+  }, [effectiveKeywords, externalContext, externalContextApplied, externalTargetModule, preferredLanguage, recommendedAgeGroup])
 
   const handleCreateSubscription = async () => {
     const trimmed = intentInput.trim()
@@ -418,7 +296,6 @@ export default function LibraryPage() {
       }
       const data = await response.json()
       setSubscriptions((prev) => prev.map((item) => (item.id === id ? data.item : item)))
-      showToast("success", data.item.status === "active" ? "Subscription resumed." : "Subscription paused.")
     } catch (error) {
       showToast("error", error instanceof Error ? error.message : "Failed to update subscription.")
     }
@@ -430,7 +307,6 @@ export default function LibraryPage() {
     setFeedback((prev) => ({ ...prev, [id]: nextValue }))
 
     if (!nextValue) {
-      showToast("success", "Feedback removed.")
       return
     }
 
@@ -444,15 +320,13 @@ export default function LibraryPage() {
         const data = await response.json()
         throw new Error(data.error || `Request failed (${response.status})`)
       }
-      showToast("success", value === "up" ? "Feedback saved: more like this." : "Feedback saved: less like this.")
     } catch (error) {
       setFeedback((prev) => ({ ...prev, [id]: previousValue }))
       showToast("error", error instanceof Error ? error.message : "Failed to save feedback.")
     }
   }
 
-  const handleOpenBrief = (brief: LibraryBrief, type: "source" | "pdf") => {
-    const url = type === "pdf" ? brief.pdfUrl : brief.sourceUrl
+  const handleOpenBrief = (url?: string) => {
     if (!url) {
       showToast("error", "No source link available.")
       return
@@ -598,12 +472,6 @@ export default function LibraryPage() {
   const handleUseSample = () => {
     const pick = samplePrompts[Math.floor(Math.random() * samplePrompts.length)]
     setIntentInput(pick)
-    showToast("success", "Sample prompt inserted.")
-  }
-
-  const handleUsePrompt = (prompt: string) => {
-    setIntentInput(prompt)
-    showToast("success", "Prompt inserted.")
   }
 
   const handleApplyExternalContextToSearch = () => {
@@ -637,14 +505,6 @@ export default function LibraryPage() {
     showToast("success", "External context dismissed.")
   }
 
-  const handleAlertRules = () => {
-    setShowAlertRules(true)
-  }
-
-  const handleRefreshResources = () => {
-    setResourceSeed(`${Date.now()}-${Math.random()}`)
-  }
-
   const formatResourceType = (value?: LibraryBrief["resourceType"]) => {
     if (!value) {
       return "Resource"
@@ -666,6 +526,13 @@ export default function LibraryPage() {
       return "N/A"
     }
     return value.toUpperCase()
+  }
+
+  const getFallbackImage = (brief: Pick<LibraryBrief, "targetModule" | "subject" | "resourceType">) => {
+    if (brief.targetModule === "speak") return "/modern-books-writing.jpg"
+    if (brief.resourceType === "paper") return "/machine-learning-neural-network.jpg"
+    if (brief.subject === "Mathematics") return "/quantum-physics-experiment.jpg"
+    return "/placeholder.jpg"
   }
 
   const clampSummary = (text: string) =>
@@ -706,9 +573,7 @@ export default function LibraryPage() {
               </Link>
               <div className="h-6 w-px bg-border" />
               <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-xl font-semibold text-foreground">SenSight Library</h1>
-                </div>
+                <h1 className="text-xl font-semibold text-foreground">SenSight Library</h1>
                 <p className="text-xs text-muted-foreground">Adaptive learning resources for every study module</p>
               </div>
             </div>
@@ -750,13 +615,9 @@ export default function LibraryPage() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {samplePrompts.map((prompt) => (
-                      <button key={prompt} type="button" onClick={() => handleUsePrompt(prompt)}>
-                        <Badge variant="secondary" className="cursor-pointer">
-                          "{prompt.replace(/\.$/, "")}"
-                        </Badge>
-                      </button>
-                    ))}
+                    <Badge variant="secondary">"Quadratic equations concept review"</Badge>
+                    <Badge variant="secondary">"Speaking fluency tips for interviews"</Badge>
+                    <Badge variant="secondary">"Derivative mistake analysis"</Badge>
                   </div>
                 </div>
 
@@ -1029,16 +890,10 @@ export default function LibraryPage() {
                     {mode === "digest" ? "Short, focused learning resources" : "Long-form study resources and analysis"}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" className="gap-2" onClick={handleRefreshResources}>
-                    <RefreshCw className="h-4 w-4" />
-                    Refresh
-                  </Button>
-                  <Button variant="outline" size="sm" className="gap-2" onClick={handleAlertRules}>
-                    <Bell className="h-4 w-4" />
-                    Alert rules
-                  </Button>
-                </div>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Bell className="h-4 w-4" />
+                  Alert rules
+                </Button>
               </div>
 
               <div className="columns-1 gap-6 md:columns-2 xl:columns-3 [column-fill:_balance]">
@@ -1073,14 +928,15 @@ export default function LibraryPage() {
                     onClick={() => setSelectedBriefId(brief.id)}
                   >
                     <CardContent className="p-5 space-y-4">
-                      <ResourceCover brief={brief} />
+                      <div className="overflow-hidden rounded-2xl border border-border/60">
+                        <img
+                          src={brief.imageUrl || getFallbackImage(brief)}
+                          alt={brief.title}
+                          className="h-44 w-full object-cover"
+                        />
+                      </div>
                       <div className="flex flex-wrap items-center gap-2">
                         {brief.isRelevant && <Badge variant="secondary">Relevant</Badge>}
-                        {typeof brief.matchScore === "number" && (
-                          <Badge variant="outline" className="bg-transparent">
-                            Match {brief.matchScore}%
-                          </Badge>
-                        )}
                         <Badge variant="secondary">{formatResourceType(brief.resourceType)}</Badge>
                         <Badge variant="outline" className="bg-transparent">
                           {brief.subject}
@@ -1112,14 +968,6 @@ export default function LibraryPage() {
                           {clampSummary(brief.summary)}
                         </p>
                       </div>
-                      {brief.matchReasons && brief.matchReasons.length > 0 && (
-                        <div className="rounded-lg border border-border/60 bg-muted/30 p-3">
-                          <p className="text-xs font-medium text-foreground">Why recommended</p>
-                          <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                            {brief.matchReasons[0]}
-                          </p>
-                        </div>
-                      )}
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>{brief.readTime}</span>
                         <span>{formatDate(brief.createdAt)}</span>
@@ -1213,14 +1061,15 @@ export default function LibraryPage() {
               </div>
             </div>
             <div className="max-h-[70vh] space-y-4 overflow-y-auto px-6 py-6">
-              <ResourceCover brief={selectedBrief} large />
+              <div className="overflow-hidden rounded-2xl border border-border/60">
+                <img
+                  src={selectedBrief.imageUrl || getFallbackImage(selectedBrief)}
+                  alt={selectedBrief.title}
+                  className="h-56 w-full object-cover"
+                />
+              </div>
               <div className="flex flex-wrap gap-2">
                 {selectedBrief.isRelevant && <Badge variant="secondary">Relevant</Badge>}
-                {typeof selectedBrief.matchScore === "number" && (
-                  <Badge variant="outline" className="bg-transparent">
-                    Match {selectedBrief.matchScore}%
-                  </Badge>
-                )}
                 <Badge variant="secondary">{formatResourceType(selectedBrief.resourceType)}</Badge>
                 <Badge variant="outline" className="bg-transparent">
                   {selectedBrief.subject}
@@ -1266,18 +1115,6 @@ export default function LibraryPage() {
                 <h4 className="text-base font-semibold text-foreground">Summary</h4>
                 <p className="text-sm text-muted-foreground leading-relaxed">{selectedBrief.summary}</p>
               </div>
-              {selectedBrief.matchReasons && selectedBrief.matchReasons.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-base font-semibold text-foreground">Recommendation reasons</h4>
-                  <div className="grid gap-2">
-                    {selectedBrief.matchReasons.map((reason) => (
-                      <div key={`${selectedBrief.id}-${reason}`} className="rounded-lg border border-border/60 bg-muted/30 p-3 text-sm text-muted-foreground">
-                        {reason}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
               {selectedBrief.keywords && selectedBrief.keywords.length > 0 && (
                 <div className="space-y-2">
                   <h4 className="text-base font-semibold text-foreground">Keywords</h4>
@@ -1299,11 +1136,11 @@ export default function LibraryPage() {
                 </div>
               )}
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" onClick={() => handleOpenBrief(selectedBrief, "source")}>
+                <Button size="sm" onClick={() => handleOpenBrief(selectedBrief.sourceUrl)}>
                   Open source
                 </Button>
                 {selectedBrief.pdfUrl && (
-                  <Button size="sm" variant="outline" onClick={() => handleOpenBrief(selectedBrief, "pdf")}>
+                  <Button size="sm" variant="outline" onClick={() => handleOpenBrief(selectedBrief.pdfUrl)}>
                     Open PDF
                   </Button>
                 )}
@@ -1326,56 +1163,6 @@ export default function LibraryPage() {
                   Less like this
                 </Button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-      {showAlertRules && (
-        <div className="fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setShowAlertRules(false)} />
-          <div className="absolute left-1/2 top-1/2 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-background shadow-2xl">
-            <div className="flex items-start justify-between gap-4 border-b border-border/60 px-6 py-4">
-              <div>
-                <h3 className="text-lg font-semibold text-foreground">Alert rules</h3>
-                <p className="text-xs text-muted-foreground">Configure how active subscriptions trigger resource updates.</p>
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => setShowAlertRules(false)}>
-                Close
-              </Button>
-            </div>
-            <div className="space-y-3 px-6 py-5">
-              {subscriptions.filter((item) => item.status === "active").map((item) => (
-                <div key={item.id} className="rounded-lg border border-border/60 bg-muted/30 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{item.title}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{item.intent}</p>
-                    </div>
-                    <Badge variant="secondary">{item.frequency}</Badge>
-                  </div>
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    Push new matching resources when tags include {item.tags.slice(0, 2).join(", ")}.
-                  </p>
-                </div>
-              ))}
-              {subscriptions.every((item) => item.status !== "active") && (
-                <div className="rounded-lg border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
-                  No active subscriptions. Resume one subscription to enable alerts.
-                </div>
-              )}
-            </div>
-            <div className="flex justify-end gap-2 border-t border-border/60 px-6 py-4">
-              <Button variant="outline" onClick={() => setShowAlertRules(false)}>
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  setShowAlertRules(false)
-                  showToast("success", "Alert rules saved.")
-                }}
-              >
-                Save rules
-              </Button>
             </div>
           </div>
         </div>

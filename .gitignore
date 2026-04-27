@@ -16,9 +16,6 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-data/*.pdf
-data/*.docx
-data/vcr-tapes/
 # env files
 .env*
 

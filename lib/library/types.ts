@@ -9,6 +9,7 @@ export type LibraryResourceType =
   | "intervention"
   | "speaking-guide"
   | "article"
+  | "paper"
 export type LibraryTargetModule = "practice" | "solver" | "dashboard" | "speak" | "library"
 export type LibraryAgeGroup = "kids" | "teens" | "general"
 export type LibraryLanguage = "en" | "zh"
@@ -41,6 +42,7 @@ export interface LibraryBriefRecord {
   readTime: string
   source: string
   sourceUrl: string
+  imageUrl?: string
   createdAt: string
   keywords: string[]
   pdfUrl?: string
@@ -81,10 +83,9 @@ export interface LibraryBrief {
   readTime: string
   source: string
   sourceUrl: string
+  imageUrl?: string
   createdAt: string
   isRelevant?: boolean
-  matchScore?: number
-  matchReasons?: string[]
   keywords?: string[]
   pdfUrl?: string
   originalTextPreview?: string
@@ -98,7 +99,6 @@ export interface QueryBriefsInput {
   ageGroup?: LibraryAgeGroup
   language?: LibraryLanguage
   limit?: number
-  shuffleSeed?: string
 }
 
 export interface CreateSubscriptionInput {

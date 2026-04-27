@@ -5,4 +5,3 @@ export { QuestionCard } from "./question-card";
 export { StudentProfileCard } from "./student-profile-card";
 export { ReportViewer } from "./report-viewer";
 export { UserProfileSidebar } from "./user-profile-sidebar";
-export { KnowledgeEnvelope } from "./knowledge-envelope";

@@ -11,9 +11,3 @@ export async function fetchKnowledgeStats(knowledge: string, page = 1, size = 10
   if (!res.ok) throw new Error("Failed to fetch stats");
   return res.json();
 }
-
-export async function fetchSearchById(queryId: string, page = 1, size = 10) {
-  const res = await fetch(`${API_BASE}/api/search/by-id?query_id=${encodeURIComponent(queryId)}&page=${page}&size=${size}`);
-  if (!res.ok) throw new Error("Failed to search by ID");
-  return res.json();
-}
